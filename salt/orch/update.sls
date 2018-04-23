@@ -141,7 +141,7 @@ etcd-setup:
 # END NOTE
 
 # Get list of masters needing reboot
-{%- set masters = salt.saltutil.runner('mine.get', tgt=is_updateable_master_tgt, fun='network.interfaces', tgt_type='compound') %}
+{%- set masters = salt.caasp_nodes.get_with_expr(is_updateable_master_tgt) %}
 {%- for master_id in masters.keys() %}
 
 {{ master_id }}-clean-shutdown:
@@ -240,7 +240,7 @@ etcd-setup:
 
 {% endfor %}
 
-{%- set workers = salt.saltutil.runner('mine.get', tgt=is_updateable_worker_tgt, fun='network.interfaces', tgt_type='compound') %}
+{%- set workers = salt.caasp_nodes.get_with_expr(is_updateable_worker_tgt) %}
 {%- for worker_id, ip in workers.items() %}
 
 # Call the node clean shutdown script
@@ -379,7 +379,7 @@ kubelet-setup:
       - {{ worker_id }}-remove-update-grain
 {%- endfor %}
 
-{%- set all_masters = salt.saltutil.runner('mine.get', tgt=is_master_tgt, fun='network.interfaces', tgt_type='compound').keys() %}
+{%- set all_masters = salt.caasp_nodes.get_with_expr(is_master_tgt) %}
 {%- set super_master = all_masters|first %}
 
 # (re-)apply all the manifests
