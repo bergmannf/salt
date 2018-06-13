@@ -44,5 +44,5 @@ def beacon(config):
     '''
 
     default_interface = __salt__['network.default_route']()[0]['interface']
-
-    return network_settings.beacon({default_interface: config['watch']})
+    config = [{default_interface: config['watch']}]
+    return network_settings.beacon(config)
