@@ -1,4 +1,4 @@
-python-M2Crypto:
+python3-M2Crypto:
   pkg.installed:
     - install_recommends: False
 
