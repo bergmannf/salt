@@ -382,34 +382,43 @@ def get_etcdctl_args_str(**kwargs):
     return " ".join(get_etcdctl_args(**kwargs))
 
 
-def get_member_id(nodename):
+def get_member_id(nodename, port=ETCD_CLIENT_PORT):
     '''
     Return the member ID (different from the node ID) for an etcd member of the cluster.
+
+    Will also check aliases of the nodename.
 
     Arguments:
 
     * `nodename`: (optional) the nodename for the member we
                   want the ID for. if no name is provided (or empty),
                   the local node will be used.
+
+    * `port`: (optional) the port for the member we
+                  want the ID for.
     '''
     target_nodename = nodename or __salt__['caasp_net.get_nodename']()
+    aliases = __salt__['caasp_net.get_aliases'](nodename_)
+    possible_nodenames = aliases.append(target_nodename)
 
     __utils__['caasp_log.debug']("getting etcd member ID for %s", target_nodename)
 
-    members_output = ''
-    try:
-        target_url = 'https://{}:{}'.format(nodename, ETCD_CLIENT_PORT)
-        members_output = etcdctl(["member", "list"])
-        for member_line in members_output.splitlines():
-            if target_url in member_line:
-                if api_version() == 'etcd2':
-                    return member_line.split(':')[0]
-                else:
-                    return member_line.split(',')[0]
 
-    except Exception as e:
-        __utils__['caasp_log.error']('cannot get member ID for "%s": %s', e, target_nodename)
-        __utils__['caasp_log.error']('output: %s', members_output)
+    members_output = ''
+    for candidate in possible_nodenames:
+        try:
+            target_url = 'https://{}:{}'.format(candidate, port)
+            members_output = etcdctl(["member", "list"])
+            for member_line in members_output.splitlines():
+                if target_url in member_line:
+                    if api_version() == 'etcd2':
+                        return member_line.split(':')[0]
+                    else:
+                        return member_line.split(',')[0]
+
+        except Exception as e:
+            __utils__['caasp_log.error']('cannot get member ID for "%s": %s', e, target_nodename)
+            __utils__['caasp_log.error']('output: %s', members_output)
 
     return ''
 
@@ -427,6 +436,12 @@ def is_member_registered(nodename=None, port=ETCD_PEER_PORT):
     for group in member_list_.keys():
         if target_url in map(lambda member: member['peer_urls'], member_list_[group]):
             return True
+
+    # It is still possible that one of the nodes is registered with an alias
+    aliases = __salt__['caasp_net.get_aliases'](nodename_)
+    if any([get_member_id(alias, port) for alias in aliases]):
+        return True
+
 
     return False
 
@@ -507,11 +522,10 @@ def member_add(name=None, nodename=None, port=ETCD_PEER_PORT):
     '''
     this_id = name or __salt__['grains.get']('id')
     nodename_ = nodename or __salt__['caasp_net.get_nodename']()
-    aliases = __salt__['caasp_net.get_aliases'](nodename_)
-    if any([get_member_id(alias) for alias in aliases]):
-        # If this node is already registered in the cluster we pretend it was successfully added.
-        return True
     this_peer_url = 'https://{}:{}'.format(nodename_, port)
+
+    if is_member_registered(nodename_):
+        return True
 
     __utils__['caasp_log.debug']('CaaS: adding etcd member %s', this_id)
     if api_version() == 'etcd2':
